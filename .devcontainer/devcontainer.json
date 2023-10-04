@@ -1,0 +1,33 @@
+{
+  "name": "dev",
+  "dockerComposeFile": [
+    "../docker-compose.yml"
+  ],
+  "service": "dev",
+  "workspaceFolder": "/src",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.profiles.linux": {
+          "bash": {
+            "path": "/bin/bash"
+          }
+        }
+      },
+      "extensions": [
+        "ms-python.python",
+        "streetsidesoftware.code-spell-checker",
+        "redhat.vscode-yaml",
+        "njpwerner.autodocstring",
+        "eamodio.gitlens",
+        "mhutchie.git-graph",
+        "Gruntfuggly.todo-tree",
+        "ms-python.isort",
+        "ms-playwright.playwright",
+        "rioj7.command-variable"
+      ]
+    }
+  },
+  "postAttachCommand": "tools/start-command.sh"
+}

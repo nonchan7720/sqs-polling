@@ -1,0 +1,25 @@
+# blackはsetup.cfgに対応していないためこのファイルで設定する
+
+[tool.black]
+exclude = '''
+(
+  /(
+      \.eggs
+    | \.git
+    | \.mypy_cache
+    | \.pytest_cache
+    | \.venv
+    | __pychache__
+  )/
+)
+'''
+
+[tool.pyright]
+exclude = [
+  "**/__pycache__",
+  "**/.*",
+]
+ignore = [
+]
+venvPath = "."
+venv = ".venv"
