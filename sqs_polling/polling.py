@@ -7,12 +7,12 @@ from asyncio import all_tasks, create_task, current_task, gather, get_event_loop
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, thread
 from functools import wraps
 from logging import getLogger
-from threading import Event
 from typing import TYPE_CHECKING, Any, Callable
 
 import boto3
 
 from sqs_polling.exceptions import RetryException
+from sqs_polling.signal import heartbeat, ready
 from sqs_polling.utils import bytes_to_str, loads, optional_b64_decode
 
 if TYPE_CHECKING:
@@ -21,9 +21,10 @@ if TYPE_CHECKING:
     from mypy_boto3_sqs import SQSClient
     from mypy_boto3_sqs.type_defs import MessageTypeDef
 
-ev = Event()
+
 logger = getLogger(__name__)
 _handlers: dict[str, dict[str, Any]] = {}
+heartbeat_interval = 1
 
 
 async def shutdown(
@@ -123,6 +124,9 @@ def _handler(
                     shutdown(loop=loop, executor=executor, signal=s)
                 ),
             )
+
+        ready.send()
+        loop.call_later(heartbeat_interval, lambda: heartbeat.send())
         loop.call_soon(
             _polling,
             loop,
