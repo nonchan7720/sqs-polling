@@ -84,7 +84,7 @@ def polling(
                 "aws_profile": aws_profile,
             }
 
-        return _inner()
+        return _inner
 
     return inner
 
