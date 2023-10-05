@@ -1,8 +1,13 @@
-import argparse
+import sys
 
-from sqs_polling.main import main
+__all__ = ("main",)
 
-if __name__ == "__main__":
+
+def main():
+    import argparse
+
+    from sqs_polling.main import main as _main
+
     parser = argparse.ArgumentParser(description="SQS polling")
     parser.add_argument(
         "-f", "--func_name", type=str, help="polling function name", required=True
@@ -21,4 +26,8 @@ if __name__ == "__main__":
         main_args["visibility_timeout"] = args.visibility_timeout
     if args.max_workers:
         main_args["max_workers"] = args.max_workers
-    main(args.func_name, **main_args)
+    sys.exit(_main(args.func_name, **main_args))
+
+
+if __name__ == "__main__":
+    main()
