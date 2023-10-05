@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-import queue
 import signal
-import sys
-from asyncio import all_tasks, create_task, current_task, gather, get_event_loop
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, thread
+from asyncio import Event, all_tasks, create_task, current_task, gather, get_event_loop
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import wraps
+from itertools import groupby
 from logging import getLogger
 from typing import TYPE_CHECKING, Any, Callable
 
 import boto3
 
 from sqs_polling.exceptions import RetryException
-from sqs_polling.signal import heartbeat, ready
 from sqs_polling.utils import bytes_to_str, loads, optional_b64_decode
 
 if TYPE_CHECKING:
@@ -21,32 +19,19 @@ if TYPE_CHECKING:
     from mypy_boto3_sqs import SQSClient
     from mypy_boto3_sqs.type_defs import MessageTypeDef
 
-
+ev = Event()
 logger = getLogger(__name__)
 _handlers: dict[str, dict[str, Any]] = {}
-heartbeat_interval = 1
 
 
 async def shutdown(
     loop, executor: ProcessPoolExecutor | ThreadPoolExecutor, signal=None
 ) -> None:
+    ev.set()
     if signal:
         logger.info(f"received exit signal {signal.name}...")
 
-    py_version = sys.version_info
-    if (py_version.major == 3) and (py_version.minor < 9):
-        executor.shutdown(wait=False)
-        work_item: thread._WorkItem | None = None
-        while True:
-            try:
-                if isinstance(executor, ThreadPoolExecutor):
-                    work_item = executor._work_queue.get_nowait()
-            except queue.Empty:
-                break
-            if work_item is not None:
-                work_item.future.cancel()
-    else:
-        executor.shutdown(cancel_futures=True)
+    executor.shutdown(wait=True, cancel_futures=False)
     tasks = [t for t in all_tasks() if t is not current_task()]
 
     [task.cancel() for task in tasks]
@@ -85,7 +70,7 @@ def polling(
                 "aws_profile": aws_profile,
             }
 
-        return _inner
+        return _inner()
 
     return inner
 
@@ -110,12 +95,11 @@ def _handler(
     interval_seconds: float = 1.0,
     max_workers: int = 1,
     max_number_of_messages: int = 1,
-    process_worker: bool = False,
+    process_worker: bool = True,
     aws_profile: dict[str, Any] = {},
 ):
-    with ProcessPoolExecutor(
-        max_workers=max_workers
-    ) if process_worker else ThreadPoolExecutor(max_workers=max_workers) as executor:
+    Executor = ProcessPoolExecutor if process_worker else ThreadPoolExecutor
+    with Executor(max_workers=max_workers + 1) as executor:
         loop = get_event_loop()
         for s in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(
@@ -124,10 +108,8 @@ def _handler(
                     shutdown(loop=loop, executor=executor, signal=s)
                 ),
             )
-
-        ready.send()
-        loop.call_later(heartbeat_interval, lambda: heartbeat.send())
-        loop.call_soon(
+        loop.run_in_executor(
+            executor,
             _polling,
             loop,
             executor,
@@ -168,33 +150,55 @@ def _polling(
     sqs = _get_session(aws_profile_dict)
     messages = _sqs_receive(sqs, queue_url, visibility_timeout, max_number_of_messages)
     if len(messages) > 0:
-        [_submit(message) for message in messages]
-    loop.call_later(
-        interval_seconds,
-        _polling,
-        loop,
-        executor,
-        queue_url,
-        visibility_timeout,
-        func,
-        exception_deletable,
-        interval_seconds,
-        max_number_of_messages,
-        aws_profile_dict,
-    )
+        if queue_url.endswith(".fifo"):
+            grouped_messages = groupby(
+                messages, key=lambda x: x.get("Attributes", {}).get("MessageGroupId")
+            )
+            # メッセージグループ単位で順番に処理させる(非同期ではなく待機させる)
+            for _, group_messages in grouped_messages:
+                messages = list(group_messages)
+                for message in messages:
+                    f = _submit(message)
+                    f.result()
+        else:
+            [_submit(message) for message in messages]
+
+    # shutdownを受け取った場合は新規ポーリングはしない
+    if not ev.is_set():
+        loop.call_later(
+            interval_seconds,
+            _polling,
+            loop,
+            executor,
+            func,
+            queue_url,
+            visibility_timeout,
+            exception_deletable,
+            interval_seconds,
+            max_number_of_messages,
+            aws_profile_dict,
+        )
 
 
 def _sqs_receive(
-    sqs: SQSClient, queue_url: str, visibility_timeout: int, max_number_of_messages=1
+    sqs: SQSClient,
+    queue_url: str,
+    visibility_timeout: int,
+    max_number_of_messages=1,
+    wait_time_second=20,
 ):
+    logger.info("Receiving.")
     response = sqs.receive_message(
         QueueUrl=queue_url,
         VisibilityTimeout=visibility_timeout,
         MaxNumberOfMessages=max_number_of_messages,
+        WaitTimeSeconds=wait_time_second,
     )
     if "Messages" in response:
         messages = [m for m in response["Messages"]]
+        logger.info("Received messages.", extra={"length": len(messages)})
     else:
+        logger.info("Empty messages.")
         messages = []
 
     return messages
@@ -218,11 +222,11 @@ def _execute(
         deletable = True
     except RetryException:
         deletable = False
-    except Exception:
+    except Exception as e:
+        logger.error(e)
         deletable = exception_deletable
 
     if deletable:
         sqs = _get_session(aws_profile_dict)
-        sqs.delete_message(
-            QueueUrl=queue_url, ReceiptHandle=message["ReceiptHandle"]  # type: ignore
-        )
+        if handle := message.get("ReceiptHandle"):
+            sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=handle)
