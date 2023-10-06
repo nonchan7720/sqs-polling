@@ -6,7 +6,8 @@ from concurrent.futures import ProcessPoolExecutor as Executor
 from importlib import import_module
 from logging import getLogger
 
-from sqs_polling.polling import _handler, _handlers
+from sqs_polling.handler import get_handler
+from sqs_polling.polling import _handler
 
 from .signal import heartbeat, ready
 
@@ -38,8 +39,8 @@ def main(func_name: str, **kwargs) -> None:
     module_name = ".".join(func_names[:-1])
     _ = import_module(module_name)
     name = func_names[-1]
-    handle = _handlers[name]
-    handle.update(**kwargs)
+    p = get_handler(name)
+    p.update(**kwargs)
     ready.send()
     heartbeat_handler()
-    _handler(**handle)
+    _handler(p)

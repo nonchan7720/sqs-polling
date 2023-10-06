@@ -10,8 +10,10 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import boto3
 
-from sqs_polling.exceptions import RetryException
-from sqs_polling.utils import bytes_to_str, loads, optional_b64_decode
+from .exceptions import RejectDLQException, RejectException, RetryException
+from .execute_result import ExecuteResult
+from .handler import Polling, set_handler
+from .utils import bytes_to_str, loads, optional_b64_decode
 
 if TYPE_CHECKING:
     from asyncio import AbstractEventLoop
@@ -21,7 +23,6 @@ if TYPE_CHECKING:
 
 ev = Event()
 logger = getLogger(__name__)
-_handlers: dict[str, dict[str, Any]] = {}
 
 
 async def shutdown(
@@ -46,29 +47,35 @@ async def shutdown(
 
 
 def polling(
-    queue_url: str,
-    visibility_timeout: int,
+    *,
+    queue_name: str = "",
+    queue_url: str = "",
+    visibility_timeout: int = 10,
     exception_deletable: bool = False,
     interval_seconds: float = 1.0,
     max_workers: int = 1,
     max_number_of_messages: int = 1,
     process_worker: bool = False,
     aws_profile: dict[str, Any] = {},
+    max_retry_count=0,
 ) -> Callable:
     def inner(func: Callable):
         @wraps(func)
         def _inner():
-            _handlers[func.__name__] = {
-                "func": func,
-                "queue_url": queue_url,
-                "visibility_timeout": visibility_timeout,
-                "exception_deletable": exception_deletable,
-                "interval_seconds": interval_seconds,
-                "max_workers": max_workers,
-                "max_number_of_messages": max_number_of_messages,
-                "process_worker": process_worker,
-                "aws_profile": aws_profile,
-            }
+            p = Polling(
+                queue_name=queue_name,
+                queue_url=queue_url,
+                visibility_timeout=visibility_timeout,
+                handler=func,
+                exception_deletable=exception_deletable,
+                interval_seconds=interval_seconds,
+                max_workers=max_workers,
+                max_number_of_messages=max_number_of_messages,
+                process_worker=process_worker,
+                aws_profile=aws_profile,
+                max_retry_count=max_retry_count,
+            )
+            set_handler(func.__name__, p)
 
         return _inner()
 
@@ -88,18 +95,14 @@ def _get_session(aws_profile_dict: dict[str, Any]) -> SQSClient:
 
 
 def _handler(
-    func: Callable,
-    queue_url: str,
-    visibility_timeout: int,
-    exception_deletable: bool = False,
-    interval_seconds: float = 1.0,
-    max_workers: int = 1,
-    max_number_of_messages: int = 1,
-    process_worker: bool = True,
-    aws_profile: dict[str, Any] = {},
+    p: Polling,
 ):
-    Executor = ProcessPoolExecutor if process_worker else ThreadPoolExecutor
-    with Executor(max_workers=max_workers + 1) as executor:
+    sqs = _get_session(p.aws_profile)
+    p.set_queue_url(sqs)
+    p.set_dead_later_queue_url(sqs)
+
+    Executor = ProcessPoolExecutor if p.process_worker else ThreadPoolExecutor
+    with Executor(max_workers=p.max_workers + 1) as executor:
         loop = get_event_loop()
         for s in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(
@@ -113,13 +116,7 @@ def _handler(
             _polling,
             loop,
             executor,
-            func,
-            queue_url,
-            visibility_timeout,
-            exception_deletable,
-            interval_seconds,
-            max_number_of_messages,
-            aws_profile,
+            p,
         )
         loop.run_forever()
         loop.close()
@@ -128,29 +125,25 @@ def _handler(
 def _polling(
     loop: AbstractEventLoop,
     executor: ThreadPoolExecutor | ProcessPoolExecutor,
-    func: Callable,
-    queue_url: str,
-    visibility_timeout: int,
-    exception_deletable: bool = False,
-    interval_seconds: float = 1.0,
-    max_number_of_messages: int = 1,
-    aws_profile_dict: dict[str, Any] = {},
+    p: Polling,
 ):
     def _submit(message: MessageTypeDef):
         f = executor.submit(
             _execute,
-            queue_url,
-            func,
+            p,
             message,
-            exception_deletable,
-            aws_profile_dict,
+            p.exception_deletable,
+            p.aws_profile,
         )
         return f
 
-    sqs = _get_session(aws_profile_dict)
-    messages = _sqs_receive(sqs, queue_url, visibility_timeout, max_number_of_messages)
+    sqs = _get_session(p.aws_profile)
+
+    messages = _sqs_receive(
+        sqs, p.queue_url, p.visibility_timeout, p.max_number_of_messages
+    )
     if len(messages) > 0:
-        if queue_url.endswith(".fifo"):
+        if p.queue_url.endswith(".fifo"):
             grouped_messages = groupby(
                 messages, key=lambda x: x.get("Attributes", {}).get("MessageGroupId")
             )
@@ -166,17 +159,11 @@ def _polling(
     # shutdownを受け取った場合は新規ポーリングはしない
     if not ev.is_set():
         loop.call_later(
-            interval_seconds,
+            p.interval_seconds,
             _polling,
             loop,
             executor,
-            func,
-            queue_url,
-            visibility_timeout,
-            exception_deletable,
-            interval_seconds,
-            max_number_of_messages,
-            aws_profile_dict,
+            p,
         )
 
 
@@ -193,6 +180,8 @@ def _sqs_receive(
         VisibilityTimeout=visibility_timeout,
         MaxNumberOfMessages=max_number_of_messages,
         WaitTimeSeconds=wait_time_second,
+        AttributeNames=["All"],
+        MessageAttributeNames=["All"],
     )
     if "Messages" in response:
         messages = [m for m in response["Messages"]]
@@ -205,28 +194,68 @@ def _sqs_receive(
 
 
 def _execute(
-    queue_url: str,
-    func: Callable,
+    p: Polling,
     message: MessageTypeDef,
     exception_deletable: bool,
     aws_profile_dict: dict[str, Any],
 ):
+    retry_count = int(message.get("Attributes", {}).get("ApproximateReceiveCount", 1))
+    p.retry = retry_count - 1  # 最初の受信分をマイナスする
+    if p.is_max_retry():
+        # 最大リトライ回数を超えた場合は再処理せずメッセージを削除する
+        __finish_message(p, ExecuteResult.Reject, message, aws_profile_dict)
+        return
     body = optional_b64_decode(message.get("Body", "{}").encode())
     payload = loads(bytes_to_str(body))
-    deletable = False
+    result_type: ExecuteResult = ExecuteResult.Nil
     try:
         if isinstance(payload, dict):
-            func(**payload)
+            p.handler(p, **payload)
         elif isinstance(payload, list) or isinstance(payload, tuple):
-            func(*payload)
-        deletable = True
+            p.handler(p, *payload)
+        result_type = ExecuteResult.Deletable
     except RetryException:
-        deletable = False
+        result_type = ExecuteResult.Retry
+    except RejectException:
+        result_type = ExecuteResult.Reject
+    except RejectDLQException:
+        result_type = ExecuteResult.SendDLQ
     except Exception as e:
         logger.error(e)
-        deletable = exception_deletable
+        result_type = (
+            ExecuteResult.Deletable if exception_deletable else ExecuteResult.Retry
+        )
+    finally:
+        __finish_message(p, result_type, message, aws_profile_dict)
 
-    if deletable:
+
+def __finish_message(
+    p: Polling,
+    result: ExecuteResult,
+    message: MessageTypeDef,
+    aws_profile_dict: dict[str, Any] = {},
+):
+    if handle := message.get("ReceiptHandle"):
         sqs = _get_session(aws_profile_dict)
-        if handle := message.get("ReceiptHandle"):
-            sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=handle)
+        match result:
+            case ExecuteResult.Deletable, ExecuteResult.Reject:
+                sqs.delete_message(QueueUrl=p.queue_url, ReceiptHandle=handle)
+            case ExecuteResult.Retry:
+                # 可視性タイムアウトを0に設定して即時再処理可能にする
+                sqs.change_message_visibility(
+                    QueueUrl=p.queue_url, ReceiptHandle=handle, VisibilityTimeout=0
+                )
+            case ExecuteResult.SendDLQ:
+                body = message.pop("Body", "")
+                kwargs = {}
+                attribute = message.get("Attributes", {})
+                if value := attribute.get("MessageGroupId"):
+                    kwargs["MessageGroupId"] = value
+                if value := attribute.get("MessageDeduplicationId", ""):
+                    kwargs["MessageDeduplicationId"] = value
+                # DLQへ送信
+                sqs.send_message(
+                    QueueUrl=p.dead_later_queue_url, MessageBody=body, **kwargs
+                )
+                # 現在のメッセージを削除
+                sqs.delete_message(QueueUrl=p.queue_url, ReceiptHandle=handle)
