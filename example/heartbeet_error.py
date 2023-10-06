@@ -3,8 +3,7 @@ from sqs_polling.polling import logger
 
 
 @polling(
-    "http://localstack:4566/000000000000/test-sns-to-sqs",
-    60,
+    queue_name="test-sns-to-sqs",
     aws_profile={
         "region_name": "ap-northeast-1",
         "aws_access_key_id": "dummy",
@@ -12,7 +11,7 @@ from sqs_polling.polling import logger
         "endpoint_url": "http://localstack:4566",
     },
 )
-def simple(*args, **kwargs):
+def simple(self, *args, **kwargs):
     import time
     from pprint import pprint
 

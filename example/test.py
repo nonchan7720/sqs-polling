@@ -3,7 +3,7 @@ from pprint import pprint
 
 import boto3
 
-topic_arn = "arn:aws:sns:ap-northeast-1:000000000000:test-sns-to-sqs"
+topic_arn = "arn:aws:sns:ap-northeast-1:000000000000:test-sns-to-sqs.fifo"
 client = boto3.client(
     "sns",
     endpoint_url="http://localstack:4566",
@@ -12,15 +12,26 @@ client = boto3.client(
     aws_secret_access_key="dummy",
 )
 
-request = {
-    "TopicArn": topic_arn,
-    "Message": json.dumps(
-        {
-            "Key1": "This is test.",
-        }
-    ),
-    "Subject": "Test SNS to SQS",
-}
 
-response = client.publish(**request)
-pprint(response)
+def main(count: int):
+    for i in range(count):
+        request = {
+            "TopicArn": topic_arn,
+            "Message": json.dumps(
+                {
+                    "Key1": f"This is test {i}.",
+                }
+            ),
+            "Subject": "Test SNS to SQS",
+            "MessageGroupId": "Group1" if i % 2 == 0 else "Group2",
+        }
+
+        response = client.publish(**request)
+        pprint(response)
+
+
+if __name__ == "__main__":
+    import sys
+
+    count = sys.argv[1]
+    main(int(count))

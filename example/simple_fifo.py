@@ -4,7 +4,7 @@ from sqs_polling.polling import logger
 
 
 @polling(
-    queue_name="test-sns-to-sqs",
+    queue_name="test-sns-to-sqs.fifo",
     aws_profile={
         "region_name": "ap-northeast-1",
         "aws_access_key_id": "dummy",
