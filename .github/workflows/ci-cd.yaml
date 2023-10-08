@@ -16,18 +16,7 @@ jobs:
         uses: styfle/cancel-workflow-action@0.11.0
         with:
           access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: set build env
-        if: startsWith(github.event.ref, 'refs/heads/main')
-        run: |
-          echo "VERSION=${{ github.sha }}" >> "$GITHUB_ENV"
-      - name: set build env
-        if: startsWith(github.event.ref, 'refs/tags')
-        run: |
-          echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
-      - name: set version
-        run: |
-          cat __version__.txt | sed s/{version}/${{ env.VERSION }}/ > sqs_polling/__version__.py
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -42,14 +31,9 @@ jobs:
           make build
       - name: Publish to Test PyPI
         if: startsWith(github.event.ref, 'refs/heads/main')
-        uses: pypa/gh-action-pypi-publish@master
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          user: __token__
-          password: ${{ secrets.TEST_PYPI_TOKEN }}
-          repository_url: https://test.pypi.org/legacy/
+          repository-url: https://test.pypi.org/legacy/
       - name: Publish a Python distribution to PyPI
         if: startsWith(github.event.ref, 'refs/tags') || github.event_name == 'release'
-        uses: pypa/gh-action-pypi-publish@master
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
+        uses: pypa/gh-action-pypi-publish@release/v1
