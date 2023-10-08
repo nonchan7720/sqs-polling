@@ -3,13 +3,13 @@ import signal
 import time
 from asyncio import get_event_loop
 from concurrent.futures import ProcessPoolExecutor as Executor
-from importlib import import_module
 from logging import getLogger
 
 from sqs_polling.handler import get_handler
 from sqs_polling.polling import _handler
 
 from .signal import heartbeat, ready
+from .utils import find_module
 
 logging = getLogger(__name__)
 
@@ -37,7 +37,7 @@ def heartbeat_handler():
 def main(func_name: str, **kwargs) -> None:
     func_names = func_name.split(".")
     module_name = ".".join(func_names[:-1])
-    _ = import_module(module_name)
+    _ = find_module(module_name)
     name = func_names[-1]
     p = get_handler(name)
     p.update(**kwargs)
