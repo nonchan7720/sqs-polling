@@ -21,7 +21,7 @@ jobs:
         run: |
           echo "VERSION=${{ github.sha }}" >> "$GITHUB_ENV"
       - name: set build env
-        if: github.ref == 'refs/heads/main'
+        if: startsWith(github.event.ref, 'refs/tags')
         run: |
           echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
