@@ -19,6 +19,11 @@ jobs:
         with:
           access_token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v4
+        if: startsWith(github.event.ref, 'refs/heads/main')
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        if: startsWith(github.event.ref, 'refs/tags') || github.event_name == 'release'
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
