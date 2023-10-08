@@ -1,5 +1,9 @@
 import base64
 import json
+import os
+import sys
+from contextlib import contextmanager
+from importlib import import_module
 from typing import Any, Callable, TypeVar
 
 
@@ -55,3 +59,56 @@ def bytes_to_str(s):
     if isinstance(s, bytes):
         return s.decode(errors="replace")
     return s
+
+
+@contextmanager
+def cwd_in_path():
+    """Context adding the current working directory to sys.path."""
+    try:
+        cwd = os.getcwd()
+    except FileNotFoundError:
+        cwd = None
+    if not cwd:
+        yield
+    elif cwd in sys.path:
+        yield
+    else:
+        sys.path.insert(0, cwd)
+        try:
+            yield cwd
+        finally:
+            try:
+                sys.path.remove(cwd)
+            except ValueError:  # pragma: no cover
+                pass
+
+
+class NotAPackage(Exception):
+    """Raised when importing a package, but it's not a package."""
+
+
+def find_module(module, path=None, imp=None):
+    """Version of :func:`imp.find_module` supporting dots."""
+    if imp is None:
+        imp = import_module
+    with cwd_in_path():
+        try:
+            return imp(module)
+        except ImportError:
+            # Raise a more specific error if the problem is that one of the
+            # dot-separated segments of the module name is not a package.
+            if "." in module:
+                parts = module.split(".")
+                for i, part in enumerate(parts[:-1]):
+                    package = ".".join(parts[: i + 1])
+                    try:
+                        mpart = imp(package)
+                    except ImportError:
+                        # Break out and re-raise the original ImportError
+                        # instead.
+                        break
+                    try:
+                        mpart.__path__
+                    except AttributeError:
+                        raise NotAPackage(package)
+            raise
