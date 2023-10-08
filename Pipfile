@@ -3,6 +3,11 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
 
+[[source]]
+url = "https://test.pypi.org/simple/"
+verify_ssl = true
+name = "testpypi"
+
 [scripts]
 init = "pipenv sync"
 init_dev = "pipenv sync --dev"
@@ -25,6 +30,8 @@ botocore-stubs = "==1.31.59"
 boto3-stubs = {extras = ["sqs"], version = "==1.28.59"}
 types-boto3 = "==1.0.2"
 python-json-logger = "==2.0.7"
+twine = "==4.0.2"
+wheel = "==0.41.2"
 
 [requires]
 python_version = "3.10"
