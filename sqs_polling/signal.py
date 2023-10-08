@@ -23,3 +23,4 @@ class Signal(Generic[TConnectHandle]):
 
 ready = Signal("Ready")
 heartbeat = Signal("Heartbeat")
+shutdown = Signal("Shutdown")

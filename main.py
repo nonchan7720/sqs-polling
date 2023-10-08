@@ -2,7 +2,7 @@ import sys
 from logging import INFO, getLogger
 from logging.config import dictConfig
 
-from sqs_polling import main
+from sqs_polling import command_main
 
 if __name__ == "__main__":
     dictConfig(
@@ -28,4 +28,4 @@ if __name__ == "__main__":
     )
     logger = getLogger("sqs_polling.polling")
     logger.setLevel(INFO)
-    main()
+    command_main()

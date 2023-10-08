@@ -1,8 +1,18 @@
+from pathlib import Path
+
 from setuptools import find_packages, setup
 
-
-def _requires_from_file(filename):
-    return open(filename).read().splitlines()
+VERSION = ""
+_ROOT = Path(__file__).parent
+with open(str(_ROOT / "sqs_polling" / "__version__.py")) as f:
+    for line in f:
+        print(line)
+        if line.startswith("version ="):
+            _, _, version = line.partition("=")
+            VERSION = version.strip(" \n'\"")
+            break
+    if VERSION == "":
+        raise RuntimeError("unable to read the version from sqs_polling/__version__.py")
 
 
 def read_file(filename: str) -> str:
@@ -12,7 +22,7 @@ def read_file(filename: str) -> str:
 
 setup(
     name="sqs-apolling",
-    version="0.0.1-alpha01",
+    version=VERSION,
     author="Nozomi nishinohara",
     author_email="nozomi_nishinohara@n-creativesystem.com",
     description="Poll AWS SQS using asyncio and execute callback.",
@@ -24,7 +34,7 @@ setup(
     },
     url="https://github.com/nonchan7720/sqs-polling",
     packages=find_packages(exclude=["tests*"]),
-    install_requires=_requires_from_file("requirements.txt")[1:],
+    install_requires=["boto3", "asyncio"],
     python_requires=">=3.10",
     classifiers=[
         "Development Status :: 1 - Planning",

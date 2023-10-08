@@ -13,6 +13,7 @@ import boto3
 from .exceptions import RejectDLQException, RejectException, RetryException
 from .execute_result import ExecuteResult
 from .handler import Polling, set_handler
+from .signal import shutdown as shutdown_signal
 from .utils import bytes_to_str, loads, optional_b64_decode
 
 if TYPE_CHECKING:
@@ -31,7 +32,7 @@ async def shutdown(
     ev.set()
     if signal:
         logger.info(f"received exit signal {signal.name}...")
-
+    shutdown_signal.send()
     executor.shutdown(wait=True, cancel_futures=False)
     tasks = [t for t in all_tasks() if t is not current_task()]
 
@@ -226,6 +227,7 @@ def _execute(
             ExecuteResult.Deletable if exception_deletable else ExecuteResult.Retry
         )
     finally:
+        logger.debug("handler finally", extra={"result_type": str(result_type)})
         __finish_message(p, result_type, message, aws_profile_dict)
 
 
@@ -238,10 +240,17 @@ def __finish_message(
     if handle := message.get("ReceiptHandle"):
         sqs = _get_session(aws_profile_dict)
         match result:
-            case ExecuteResult.Deletable, ExecuteResult.Reject:
+            case ExecuteResult.Deletable | ExecuteResult.Reject:
+                logger.debug(
+                    "Delete message", extra={"queue": p.queue_url, "handle": handle}
+                )
                 sqs.delete_message(QueueUrl=p.queue_url, ReceiptHandle=handle)
             case ExecuteResult.Retry:
                 # 可視性タイムアウトを0に設定して即時再処理可能にする
+                logger.debug(
+                    "Change message visibility",
+                    extra={"queue": p.queue_url, "handle": handle},
+                )
                 sqs.change_message_visibility(
                     QueueUrl=p.queue_url, ReceiptHandle=handle, VisibilityTimeout=0
                 )
@@ -253,9 +262,19 @@ def __finish_message(
                     kwargs["MessageGroupId"] = value
                 if value := attribute.get("MessageDeduplicationId", ""):
                     kwargs["MessageDeduplicationId"] = value
+                logger.debug(
+                    "Send DLQ",
+                    extra={
+                        "queue": p.queue_url,
+                        "handle": handle,
+                        "dead_later_queue": p.dead_later_queue_url,
+                    },
+                )
                 # DLQへ送信
                 sqs.send_message(
                     QueueUrl=p.dead_later_queue_url, MessageBody=body, **kwargs
                 )
                 # 現在のメッセージを削除
                 sqs.delete_message(QueueUrl=p.queue_url, ReceiptHandle=handle)
+    else:
+        raise ValueError("Missing ReceiptHandle.")
