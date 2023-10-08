@@ -1,3 +1,6 @@
+[sqs_polling]
+dynamic = ["version"]
+
 # blackはsetup.cfgに対応していないためこのファイルで設定する
 
 [tool.black]
@@ -23,3 +26,6 @@ ignore = [
 ]
 venvPath = "."
 venv = ".venv"
+
+[tool.setuptools_scm]
+version_file = "sqs_polling/__version__.py"

@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "0e334d85cbbb8cd440cf67740804a3580d5b4e21662430e6215bbb1ae5cc97ad"
+            "sha256": "699fc18eafcdca69f613d904833074e1a7887e17aa3dee290b70d5d51bab2564"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -817,6 +817,15 @@
             "markers": "python_version >= '3.8'",
             "version": "==68.2.2"
         },
+        "setuptools-scm": {
+            "hashes": [
+                "sha256:b47844cd2a84b83b3187a5782c71128c28b4c94cad8bfb871da2784a5cb54c4f",
+                "sha256:b5f43ff6800669595193fd09891564ee9d1d7dcb196cab4b2506d53a2e1c95c7"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.8'",
+            "version": "==8.0.4"
+        },
         "smmap": {
             "hashes": [
                 "sha256:dceeb6c0028fdb6734471eb07c0cd2aae706ccaecab45965ee83f11c8d3b1f62",
@@ -838,7 +847,7 @@
                 "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc",
                 "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f"
             ],
-            "markers": "python_version < '3.11'",
+            "markers": "python_full_version < '3.11.0a7'",
             "version": "==2.0.1"
         },
         "twine": {

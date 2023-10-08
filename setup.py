@@ -1,18 +1,4 @@
-from pathlib import Path
-
 from setuptools import find_packages, setup
-
-VERSION = ""
-_ROOT = Path(__file__).parent
-with open(str(_ROOT / "sqs_polling" / "__version__.py")) as f:
-    for line in f:
-        print(line)
-        if line.startswith("version ="):
-            _, _, version = line.partition("=")
-            VERSION = version.strip(" \n'\"")
-            break
-    if VERSION == "":
-        raise RuntimeError("unable to read the version from sqs_polling/__version__.py")
 
 
 def read_file(filename: str) -> str:
@@ -22,7 +8,8 @@ def read_file(filename: str) -> str:
 
 setup(
     name="sqs-apolling",
-    version=VERSION,
+    use_scm_version=True,
+    setup_requires=["setuptools_scm"],
     author="Nozomi nishinohara",
     author_email="nozomi_nishinohara@n-creativesystem.com",
     description="Poll AWS SQS using asyncio and execute callback.",
