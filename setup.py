@@ -8,7 +8,7 @@ def read_file(filename: str) -> str:
 
 setup(
     name="sqs-apolling",
-    use_scm_version=True,
+    use_scm_version={"local_scheme": "no-local-version"},
     setup_requires=["setuptools_scm"],
     author="Nozomi nishinohara",
     author_email="nozomi_nishinohara@n-creativesystem.com",

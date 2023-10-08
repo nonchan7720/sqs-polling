@@ -1,5 +1,6 @@
-[sqs_polling]
-dynamic = ["version"]
+[build-system]
+requires = ["setuptools", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
 
 # blackはsetup.cfgに対応していないためこのファイルで設定する
 
