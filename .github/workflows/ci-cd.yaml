@@ -3,7 +3,7 @@ name: Upload pypi package release
 on:
   push:
     branches:
-      - master
+      - main
   release:
     types:
       - created
