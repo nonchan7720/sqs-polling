@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import signal
+import traceback
 from asyncio import Event, all_tasks, create_task, current_task, gather, get_event_loop
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import wraps
@@ -13,6 +14,7 @@ import boto3
 from .exceptions import RejectDLQException, RejectException, RetryException
 from .execute_result import ExecuteResult
 from .handler import Polling, set_handler
+from .signal import handler_result, missing_receipt_handle
 from .signal import shutdown as shutdown_signal
 from .utils import bytes_to_str, loads, optional_b64_decode
 
@@ -209,6 +211,13 @@ def _execute(
     body = optional_b64_decode(message.get("Body", "{}").encode())
     payload = loads(bytes_to_str(body))
     result_type: ExecuteResult = ExecuteResult.Nil
+    handler_result_kwargs = {
+        "result_type": result_type,
+        "payload": payload,
+        "retry_count": p.retry,
+        "error_message": "",
+        "stack_trace": "",
+    }
     try:
         if isinstance(payload, dict):
             p.handler(p, **payload)
@@ -222,12 +231,16 @@ def _execute(
     except RejectDLQException:
         result_type = ExecuteResult.SendDLQ
     except Exception as e:
-        logger.error(e)
+        handler_result_kwargs["error_message"] = str(e)
+        handler_result_kwargs["stack_trace"] = traceback.format_exc()
+        logger.error(e, exc_info=True, stack_info=True)
         result_type = (
             ExecuteResult.Deletable if exception_deletable else ExecuteResult.Retry
         )
     finally:
+        handler_result_kwargs["result_type"] = result_type
         logger.debug("handler finally", extra={"result_type": str(result_type)})
+        handler_result.send(**handler_result_kwargs)
         __finish_message(p, result_type, message, aws_profile_dict)
 
 
@@ -277,4 +290,5 @@ def __finish_message(
                 # 現在のメッセージを削除
                 sqs.delete_message(QueueUrl=p.queue_url, ReceiptHandle=handle)
     else:
+        missing_receipt_handle.send(result_type=result, message=message)
         raise ValueError("Missing ReceiptHandle.")
