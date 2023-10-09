@@ -4,11 +4,9 @@ TConnectHandle = TypeVar("TConnectHandle", bound=Callable)
 
 
 class Signal(Generic[TConnectHandle]):
-    def __init__(self, name: str, *args, **kwargs) -> None:
+    def __init__(self, name: str) -> None:
         self.name = name
         self.__handlers: list[TConnectHandle] = []
-        self.__args = args
-        self.__kwargs = kwargs
 
     def connect(self, handler: TConnectHandle):
         self.__handlers.append(handler)
@@ -16,11 +14,13 @@ class Signal(Generic[TConnectHandle]):
     def disconnect(self, handler: TConnectHandle):
         self.__handlers.remove(handler)
 
-    def send(self):
+    def send(self, *args, **kwargs):
         for handler in self.__handlers:
-            handler(*self.__args, **self.__kwargs)
+            handler(*args, **kwargs)
 
 
 ready = Signal("Ready")
 heartbeat = Signal("Heartbeat")
 shutdown = Signal("Shutdown")
+handler_result = Signal("HandlerResult")
+missing_receipt_handle = Signal("MissingReceiptHandle")
