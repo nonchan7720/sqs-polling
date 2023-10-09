@@ -11,4 +11,5 @@ bdist_wheel:
 	pipenv run python setup.py bdist_wheel
 
 .PHONY: build
-build: remove dist bdist_wheel
+build: remove
+	pipenv run python setup.py bdist_wheel sdist
