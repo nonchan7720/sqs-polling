@@ -1,0 +1,39 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base",
+    ":timezone(Asia/Tokyo)"
+  ],
+  "stabilityDays": 7,
+  "labels": [
+    "renovate"
+  ],
+  "packageRules": [
+    {
+      "matchManagers": [
+        "pipenv"
+      ],
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "addLabels": [
+        "pipenv",
+        "minor"
+      ],
+      "groupName": "pipenv Updates(minor)"
+    },
+    {
+      "matchManagers": [
+        "pipenv"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "addLabels": [
+        "pipenv",
+        "patch"
+      ],
+      "groupName": "pipenv Updates(patch)"
+    }
+  ]
+}
