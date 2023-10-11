@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from asyncio import AbstractEventLoop
 
     from mypy_boto3_sqs import SQSClient
-    from mypy_boto3_sqs.type_defs import MessageTypeDef
+    from mypy_boto3_sqs.type_defs import MessageAttributeValueTypeDef, MessageTypeDef
 
 ev = Event()
 logger = getLogger(__name__)
@@ -61,6 +61,7 @@ def polling(
     process_worker: bool = False,
     aws_profile: dict[str, Any] = {},
     max_retry_count=0,
+    message_attributes: bool = False,
 ) -> Callable:
     def inner(func: Callable):
         @wraps(func)
@@ -77,6 +78,7 @@ def polling(
                 process_worker=process_worker,
                 aws_profile=aws_profile,
                 max_retry_count=max_retry_count,
+                message_attributes=message_attributes,
             )
             set_handler(func.__name__, p)
 
@@ -151,7 +153,8 @@ def _polling(
                 messages, key=lambda x: x.get("Attributes", {}).get("MessageGroupId")
             )
             # メッセージグループ単位で順番に処理させる(非同期ではなく待機させる)
-            for _, group_messages in grouped_messages:
+            for group_id, group_messages in grouped_messages:
+                logger.info("Fifo queue", extra={"GroupId": group_id})
                 messages = list(group_messages)
                 for message in messages:
                     f = _submit(message)
@@ -219,10 +222,21 @@ def _execute(
         "stack_trace": "",
     }
     try:
-        if isinstance(payload, dict):
-            p.handler(p, **payload)
-        elif isinstance(payload, list) or isinstance(payload, tuple):
-            p.handler(p, *payload)
+        if not p.message_attributes:
+            if isinstance(payload, dict):
+                p.handler(p, **payload)
+            elif isinstance(payload, list) or isinstance(payload, tuple):
+                p.handler(p, *payload)
+        else:
+            message_attribute = {
+                key: _get_message_attribute_value(value)
+                for key, value in message.get("MessageAttributes", {}).items()
+            }
+            if isinstance(payload, dict):
+                payload.update(message_attribute)
+                p.handler(p, **payload)
+            elif isinstance(payload, list) or isinstance(payload, tuple):
+                p.handler(p, *payload, **message_attribute)
         result_type = ExecuteResult.Deletable
     except RetryException:
         result_type = ExecuteResult.Retry
@@ -292,3 +306,21 @@ def __finish_message(
     else:
         missing_receipt_handle.send(result_type=result, message=message)
         raise ValueError("Missing ReceiptHandle.")
+
+
+def _get_message_attribute_value(
+    value: MessageAttributeValueTypeDef,
+) -> str | bytes | list[str] | list[bytes] | None:
+    """
+    StringValue
+    BinaryValue
+    StringListValues
+    BinaryListValues
+    """
+    return value.get(
+        "StringValue",
+        value.get(
+            "BinaryValue",
+            value.get("StringListValues", value.get("BinaryListValues", None)),
+        ),
+    )

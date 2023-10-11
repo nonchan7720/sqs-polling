@@ -19,6 +19,7 @@ class Polling:
         process_worker: bool = False,
         aws_profile: dict[str, Any] = {},
         max_retry_count: int = 0,
+        message_attributes: bool = False
     ) -> None:
         if queue_name == "" and queue_url == "":
             raise ValueError("Either queue_name or queue_url must be specified.")
@@ -35,6 +36,7 @@ class Polling:
         self.__retry = 0
         self.__max_retry_count = max_retry_count
         self.__dead_later_queue_url = ""
+        self.message_attributes = message_attributes
 
     @property
     def retry(self) -> int:
@@ -71,6 +73,9 @@ class Polling:
         )
         self.process_worker = kwargs.get("process_worker", self.process_worker)
         self.aws_profile = kwargs.get("aws_profile", self.aws_profile)
+        message_attributes = kwargs.get("message_attributes", self.message_attributes)
+        if isinstance(message_attributes, bool):
+            self.message_attributes = message_attributes
 
     def connect(self, func) -> None:
         self.handler = func
