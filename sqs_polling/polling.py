@@ -229,11 +229,13 @@ def _execute(
                 p.handler(p, *payload)
         else:
             message_attribute = {
-                key: _get_message_attribute_value(value)
-                for key, value in message.get("MessageAttributes", {}).items()
+                "message_attributes": {
+                    key: _get_message_attribute_value(value)
+                    for key, value in message.get("MessageAttributes", {}).items()
+                }
             }
             if isinstance(payload, dict):
-                payload.update(message_attribute)
+                payload.update()
                 p.handler(p, **payload)
             elif isinstance(payload, list) or isinstance(payload, tuple):
                 p.handler(p, *payload, **message_attribute)
