@@ -3,6 +3,22 @@ from typing import Any, Callable
 
 from sqs_polling.types import RedrivePolicy
 
+TMessageBody = str
+TMessageAttribute = dict[str, Any] | None
+TMessageGroupId = str | None
+TMessageDeduplicationId = str | None
+
+THandle = Callable[
+    [
+        "Polling",
+        TMessageBody,
+        TMessageAttribute,
+        TMessageGroupId,
+        TMessageDeduplicationId,
+    ],
+    None,
+]
+
 
 class Polling:
     def __init__(
@@ -11,7 +27,7 @@ class Polling:
         queue_name: str = "",
         queue_url: str = "",
         visibility_timeout: int = 10,
-        handler: Callable = lambda self, *args, **kwargs: ...,
+        handler: THandle = lambda self, message_body, message_attribute, message_group_id, message_duplication_id: None,
         exception_deletable: bool = False,
         interval_seconds: float = 1.0,
         max_workers: int = 1,
@@ -19,13 +35,12 @@ class Polling:
         process_worker: bool = False,
         aws_profile: dict[str, Any] = {},
         max_retry_count: int = 0,
-        message_attributes: bool = False
     ) -> None:
         if queue_name == "" and queue_url == "":
             raise ValueError("Either queue_name or queue_url must be specified.")
         self.queue_name = queue_name
         self.__queue_url = queue_url
-        self.handler = handler
+        self.handler: THandle = handler
         self.visibility_timeout = visibility_timeout
         self.exception_deletable = exception_deletable
         self.interval_seconds = interval_seconds
@@ -36,7 +51,6 @@ class Polling:
         self.__retry = 0
         self.__max_retry_count = max_retry_count
         self.__dead_later_queue_url = ""
-        self.message_attributes = message_attributes
 
     @property
     def retry(self) -> int:
@@ -73,11 +87,8 @@ class Polling:
         )
         self.process_worker = kwargs.get("process_worker", self.process_worker)
         self.aws_profile = kwargs.get("aws_profile", self.aws_profile)
-        message_attributes = kwargs.get("message_attributes", self.message_attributes)
-        if isinstance(message_attributes, bool):
-            self.message_attributes = message_attributes
 
-    def connect(self, func) -> None:
+    def connect(self, func: THandle) -> None:
         self.handler = func
 
     def is_max_retry(self) -> bool:
