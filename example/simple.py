@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqs_polling import heartbeat, polling, ready
 from sqs_polling.handler import Polling
 from sqs_polling.polling import logger
@@ -12,14 +14,19 @@ from sqs_polling.polling import logger
         "endpoint_url": "http://localstack:4566",
     },
 )
-def simple(self: Polling, *args, **kwargs):
-    import time
+def simple(
+    self: Polling,
+    message_body: str,
+    message_attribute: dict[str, Any] | None,
+    message_group_id: str | None,
+    message_duplication_id: str | None,
+):
+    import json
     from pprint import pprint
 
-    logger.info("simple received.")
-    time.sleep(2)
-    kwargs.update({"retry": self.retry})
-    pprint(kwargs)
+    data: dict[str, Any] = json.loads(message_body)
+    data.update(message_attribute or {})
+    pprint(data)
 
 
 @ready.connect

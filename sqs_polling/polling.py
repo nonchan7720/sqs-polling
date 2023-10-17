@@ -13,16 +13,15 @@ import boto3
 
 from .exceptions import RejectDLQException, RejectException, RetryException
 from .execute_result import ExecuteResult
-from .handler import Polling, set_handler
+from .handler import Polling, THandle, set_handler
 from .signal import handler_result, missing_receipt_handle
 from .signal import shutdown as shutdown_signal
-from .utils import bytes_to_str, loads, optional_b64_decode
 
 if TYPE_CHECKING:
     from asyncio import AbstractEventLoop
 
     from mypy_boto3_sqs import SQSClient
-    from mypy_boto3_sqs.type_defs import MessageTypeDef
+    from mypy_boto3_sqs.type_defs import MessageAttributeValueTypeDef, MessageTypeDef
 
 ev = Event()
 logger = getLogger(__name__)
@@ -61,8 +60,8 @@ def polling(
     process_worker: bool = False,
     aws_profile: dict[str, Any] = {},
     max_retry_count=0,
-) -> Callable:
-    def inner(func: Callable):
+) -> Callable[[THandle], None]:
+    def inner(func: THandle):
         @wraps(func)
         def _inner():
             p = Polling(
@@ -151,7 +150,8 @@ def _polling(
                 messages, key=lambda x: x.get("Attributes", {}).get("MessageGroupId")
             )
             # メッセージグループ単位で順番に処理させる(非同期ではなく待機させる)
-            for _, group_messages in grouped_messages:
+            for group_id, group_messages in grouped_messages:
+                logger.info("Fifo queue", extra={"GroupId": group_id})
                 messages = list(group_messages)
                 for message in messages:
                     f = _submit(message)
@@ -202,27 +202,35 @@ def _execute(
     exception_deletable: bool,
     aws_profile_dict: dict[str, Any],
 ):
-    retry_count = int(message.get("Attributes", {}).get("ApproximateReceiveCount", 1))
+    attribute = message.get("Attributes", {})
+    retry_count = int(attribute.get("ApproximateReceiveCount", 1))
     p.retry = retry_count - 1  # 最初の受信分をマイナスする
     if p.is_max_retry():
         # 最大リトライ回数を超えた場合は再処理せずメッセージを削除する
         __finish_message(p, ExecuteResult.Reject, message, aws_profile_dict)
         return
-    body = optional_b64_decode(message.get("Body", "{}").encode())
-    payload = loads(bytes_to_str(body))
+    body = message.get("Body", "")
     result_type: ExecuteResult = ExecuteResult.Nil
     handler_result_kwargs = {
         "result_type": result_type,
-        "payload": payload,
         "retry_count": p.retry,
         "error_message": "",
         "stack_trace": "",
     }
     try:
-        if isinstance(payload, dict):
-            p.handler(p, **payload)
-        elif isinstance(payload, list) or isinstance(payload, tuple):
-            p.handler(p, *payload)
+        message_attribute: dict[str, Any] | None = None
+        if _message_attribute := message.get("MessageAttributes"):
+            message_attribute = {
+                key: _get_message_attribute_value(value)
+                for key, value in _message_attribute.items()
+            }
+        p.handler(
+            p,
+            body,
+            message_attribute,
+            attribute.get("MessageGroupId", None),
+            attribute.get("MessageDeduplicationId", None),
+        )
         result_type = ExecuteResult.Deletable
     except RetryException:
         result_type = ExecuteResult.Retry
@@ -292,3 +300,21 @@ def __finish_message(
     else:
         missing_receipt_handle.send(result_type=result, message=message)
         raise ValueError("Missing ReceiptHandle.")
+
+
+def _get_message_attribute_value(
+    value: MessageAttributeValueTypeDef,
+) -> str | bytes | list[str] | list[bytes] | None:
+    """
+    StringValue
+    BinaryValue
+    StringListValues
+    BinaryListValues
+    """
+    return value.get(
+        "StringValue",
+        value.get(
+            "BinaryValue",
+            value.get("StringListValues", value.get("BinaryListValues", None)),
+        ),
+    )

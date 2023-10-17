@@ -3,7 +3,7 @@ from pprint import pprint
 
 import boto3
 
-topic_arn = "arn:aws:sns:ap-northeast-1:000000000000:test-sns-to-sqs.fifo"
+topic_arn = "arn:aws:sns:ap-northeast-1:000000000000:test-sns-to-sqs"
 client = boto3.client(
     "sns",
     endpoint_url="http://localstack:4566",
@@ -23,7 +23,9 @@ def main(count: int):
                 }
             ),
             "Subject": "Test SNS to SQS",
-            "MessageGroupId": "Group1" if i % 2 == 0 else "Group2",
+            "MessageAttributes": {
+                "Event": {"DataType": "String", "StringValue": "Create"}
+            },
         }
 
         response = client.publish(**request)
