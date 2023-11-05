@@ -1,38 +1,42 @@
 import os
 import signal
-import time
-from asyncio import create_task, get_event_loop
+from asyncio import Future, create_task, get_event_loop
 from concurrent.futures import ProcessPoolExecutor as Executor
 from concurrent.futures import ThreadPoolExecutor
-from logging import getLogger
+from time import sleep
 
 from sqs_polling.handler import get_handler
-from sqs_polling.polling import _handler, shutdown
+from sqs_polling.polling import _handler, logger, shutdown
 
 from .signal import heartbeat, ready
 from .utils import find_module
-
-logging = getLogger(__name__)
 
 
 def _heartbeat_handler(pid: int):
     while True:
         try:
             heartbeat.send()
-            time.sleep(2)
+            sleep(2)
         except KeyboardInterrupt:
             break
         except Exception as e:
-            logging.error(e)
-            os.kill(pid, signal.SIGTERM)
-            break
+            logger.error(e)
+            raise e
 
 
 def heartbeat_handler():
+    def callback(pid: int):
+        def _callback(future: Future):
+            if future.exception():
+                os.kill(pid, signal.SIGTERM)
+        return _callback
+
     pid = os.getpid()
     loop = get_event_loop()
     executor = Executor(max_workers=1)
-    loop.run_in_executor(executor, _heartbeat_handler, pid)
+    future = loop.run_in_executor(executor, _heartbeat_handler, pid)
+    future.add_done_callback(callback(pid))
+
 
 def handler(func_name: str, **kwargs) -> Executor | ThreadPoolExecutor:
     func_names = func_name.split(".")
