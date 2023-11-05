@@ -33,6 +33,8 @@ python-json-logger = "==2.0.7"
 twine = "==4.0.2"
 wheel = "==0.41.2"
 setuptools-scm = "*"
+fastapi = "==0.104.1"
+uvicorn = {extras = ["standard"], version = "==0.24.0"}
 
 [requires]
 python_version = "3.10"
