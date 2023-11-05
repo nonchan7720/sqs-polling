@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import signal
 import traceback
-from asyncio import Event, all_tasks, create_task, current_task, gather, get_event_loop
+from asyncio import Event, all_tasks, current_task, gather, get_event_loop
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import wraps
 from itertools import groupby
@@ -96,32 +95,21 @@ def _get_session(aws_profile_dict: dict[str, Any]) -> SQSClient:
     return _session
 
 
-def _handler(
-    p: Polling,
-):
+def _handler(p: Polling) -> ProcessPoolExecutor | ThreadPoolExecutor:
     sqs = _get_session(p.aws_profile)
     p.set_queue_url(sqs)
     p.set_dead_later_queue_url(sqs)
-
     Executor = ProcessPoolExecutor if p.process_worker else ThreadPoolExecutor
-    with Executor(max_workers=p.max_workers + 1) as executor:
-        loop = get_event_loop()
-        for s in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(
-                s,
-                lambda s=s: create_task(
-                    shutdown(loop=loop, executor=executor, signal=s)
-                ),
-            )
-        loop.run_in_executor(
-            executor,
-            _polling,
-            loop,
-            executor,
-            p,
-        )
-        loop.run_forever()
-        loop.close()
+    executor = Executor(max_workers=p.max_workers + 1)
+    loop = get_event_loop()
+    loop.run_in_executor(
+        executor,
+        _polling,
+        loop,
+        executor,
+        p,
+    )
+    return executor
 
 
 def _polling(
