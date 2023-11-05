@@ -42,5 +42,4 @@ def heartbeat_():
         if counter >= 2:
             raise Exception("Heartbeat Test")
         counter += 1
-    else:
-        logger.info("Heartbeat.")
+    logger.info("HeartBeat.")
