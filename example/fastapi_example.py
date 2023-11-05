@@ -4,6 +4,8 @@ import sys
 
 sys.path.append(".")
 
+from contextlib import asynccontextmanager
+
 import boto3
 from fastapi import FastAPI
 from uvicorn import run
@@ -20,7 +22,13 @@ client = boto3.client(
 )
 
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    handler('example.simple.simple')
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 @app.post("/")
 async def some_endpoint():
@@ -39,7 +47,11 @@ async def some_endpoint():
     response = client.publish(**request)
     return {"message": response}
 
+#### NOTE: There is no problem with using deprecated methods.
+# @app.on_event('startup')
+# async def startup_():
+#     handler('example.simple.simple')
+
 
 if __name__ == "__main__":
-    handler('example.simple.simple')
     run(app, host="0.0.0.0", port=8080)
