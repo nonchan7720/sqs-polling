@@ -20,7 +20,7 @@ services:
       DOCKER_HOST: unix:///var/run/docker.sock
       HOST_TMP_FOLDER: /tmp/localstack
       SERVICES: s3,sqs
-      HOSTNAME_EXTERNAL: localstack.invoice.klavis.link
+      HOSTNAME_EXTERNAL: localstack.local
       AWS_DEFAULT_REGION: ap-northeast-1
       DISABLE_CORS_CHECKS: 1
       DISABLE_CUSTOM_CORS_S3: 1
