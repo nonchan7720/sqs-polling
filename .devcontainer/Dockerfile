@@ -19,8 +19,6 @@ RUN apt-get update \
     && tar xzvf docker-${DOCKER_CLIENT_VERSION}.tgz \
     && chmod +x docker/*
 
-FROM --platform=$BUILDPLATFORM node:18.16.1-bullseye-slim as frontend
-
 FROM --platform=$BUILDPLATFORM python:3.10.8-slim-bullseye
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -41,11 +39,9 @@ RUN apt-get update -y \
     sudo \
     locales \
     gcc \
-    default-libmysqlclient-dev \
-    libcurl4-openssl-dev \
     libssl-dev \
+    libcurl4-openssl-dev \
     libmagic1 \
-    default-mysql-client \
     locales \
     openssh-client \
     g++ \
