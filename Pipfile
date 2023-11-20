@@ -11,6 +11,7 @@ name = "testpypi"
 [scripts]
 init = "pipenv sync"
 init_dev = "pipenv sync --dev"
+lint = "bash -c 'isort --check-only . && black --check . && flake8 . && pyright .'"
 
 [packages]
 asyncio = "==3.4.3"
