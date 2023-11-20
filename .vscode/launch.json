@@ -13,6 +13,15 @@
         "example.simple.simple"
       ],
       "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Python: fastapi",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/example/fastapi_example.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}"
     }
   ]
 }
