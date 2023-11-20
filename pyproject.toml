@@ -5,6 +5,11 @@ build-backend = "setuptools.build_meta"
 # blackはsetup.cfgに対応していないためこのファイルで設定する
 
 [tool.black]
+extend-exclude = '''
+(
+  sqs_polling/__version__.py
+)
+'''
 exclude = '''
 (
   /(
