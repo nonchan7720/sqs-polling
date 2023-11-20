@@ -25,7 +25,9 @@
         "Gruntfuggly.todo-tree",
         "ms-python.isort",
         "ms-playwright.playwright",
-        "rioj7.command-variable"
+        "rioj7.command-variable",
+        "ms-python.black-formatter",
+        "ms-python.flake8"
       ]
     }
   },
