@@ -9,23 +9,18 @@
   },
   "typescript.preferences.importModuleSpecifier": "non-relative",
   "[python]": {
-    "editor.defaultFormatter": null,
+    "editor.defaultFormatter": "ms-python.black-formatter",
     "editor.tabSize": 4,
     "editor.codeActionsOnSave": [
       "source.fixAll.pylance",
       "source.organizeImports"
-    ]
+    ],
+    "editor.formatOnSave": true
   },
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python.envFile": "${workspaceFolder}/.env",
-  "python.formatting.provider": "black",
   "python.languageServer": "Pylance",
-  "python.linting.cwd": "${workspaceFolder}",
-  "python.linting.lintOnSave": true,
-  "python.linting.enabled": true,
-  "python.linting.pylintEnabled": false,
-  "python.linting.flake8Enabled": true,
-  "python.linting.banditEnabled": true,
+  "flake8.cwd": "${workspaceFolder}",
   "python.analysis.completeFunctionParens": true,
   "python.analysis.stubPath": "typings",
   "python.analysis.logLevel": "Warning",
@@ -49,9 +44,6 @@
   "cSpell.spellCheckOnlyWorkspaceFiles": true,
   "cSpell.enableFiletypes": [
     "toml"
-  ],
-  "python.linting.banditArgs": [
-    "--configfile=bandit.yaml"
   ],
   "python.analysis.typeCheckingMode": "basic",
   "python.analysis.fixAll": [
