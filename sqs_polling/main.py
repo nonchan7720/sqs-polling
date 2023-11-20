@@ -29,6 +29,7 @@ def heartbeat_handler():
         def _callback(future: Future):
             if future.exception():
                 os.kill(pid, signal.SIGTERM)
+
         return _callback
 
     pid = os.getpid()
@@ -56,9 +57,7 @@ def main(func_name: str, **kwargs) -> None:
     for s in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(
             s,
-            lambda s=s: create_task(
-                shutdown(loop=loop, executor=executor, signal=s)
-            ),
+            lambda s=s: create_task(shutdown(loop=loop, executor=executor, signal=s)),
         )
     loop.run_forever()
     loop.close()
