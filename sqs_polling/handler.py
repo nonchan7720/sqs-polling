@@ -1,9 +1,14 @@
 import json
-from typing import Any, Callable
+from typing import Any, Callable, TypeVar
 
 from sqs_polling.types import RedrivePolicy
 
-TMessageBody = str
+
+def __default_decode(x: str) -> str:
+    return x
+
+
+TMessageBody = TypeVar("TMessageBody")
 TMessageAttribute = dict[str, Any] | None
 TMessageGroupId = str | None
 TMessageDeduplicationId = str | None
@@ -18,6 +23,8 @@ THandle = Callable[
     ],
     None,
 ]
+
+TDecode = Callable[[str], TMessageBody] | None
 
 
 class Polling:
@@ -35,6 +42,7 @@ class Polling:
         process_worker: bool = False,
         aws_profile: dict[str, Any] = {},
         max_retry_count: int = 0,
+        decoder: TDecode[TMessageBody] = None
     ) -> None:
         if queue_name == "" and queue_url == "":
             raise ValueError("Either queue_name or queue_url must be specified.")
@@ -51,6 +59,7 @@ class Polling:
         self.__retry = 0
         self.__max_retry_count = max_retry_count
         self.__dead_later_queue_url = ""
+        self.decorator = decoder or __default_decode
 
     @property
     def retry(self) -> int:
@@ -87,6 +96,7 @@ class Polling:
         )
         self.process_worker = kwargs.get("process_worker", self.process_worker)
         self.aws_profile = kwargs.get("aws_profile", self.aws_profile)
+        self.decorator = kwargs.get("decorator", self.decorator)
 
     def connect(self, func: THandle) -> None:
         self.handler = func

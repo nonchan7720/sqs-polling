@@ -1,8 +1,13 @@
+import json
 from typing import Any
 
 from sqs_polling import heartbeat, polling, ready
 from sqs_polling.handler import Polling
 from sqs_polling.polling import logger
+
+
+def decoder(value: str) -> dict[str, Any]:
+    return json.loads(value)
 
 
 @polling(
@@ -13,18 +18,18 @@ from sqs_polling.polling import logger
         "aws_secret_access_key": "dummy",
         "endpoint_url": "http://localstack:4566",
     },
+    decoder=decoder,
 )
 def simple(
     self: Polling,
-    message_body: str,
+    message_body: dict[str, Any],
     message_attribute: dict[str, Any] | None,
     message_group_id: str | None,
     message_duplication_id: str | None,
 ):
-    import json
     from pprint import pprint
 
-    data: dict[str, Any] = json.loads(message_body)
+    data: dict[str, Any] = message_body
     data.update(message_attribute or {})
     pprint(data)
 

@@ -12,7 +12,7 @@ import boto3
 
 from .exceptions import RejectDLQException, RejectException, RetryException
 from .execute_result import ExecuteResult
-from .handler import Polling, THandle, set_handler
+from .handler import Polling, TDecode, THandle, TMessageBody, set_handler
 from .signal import handler_result, missing_receipt_handle
 from .signal import shutdown as shutdown_signal
 
@@ -59,7 +59,8 @@ def polling(
     process_worker: bool = False,
     aws_profile: dict[str, Any] = {},
     max_retry_count=0,
-) -> Callable[[THandle], None]:
+    decoder: TDecode[TMessageBody] = None,
+) -> Callable[[THandle[TMessageBody]], None]:
     def inner(func: THandle):
         @wraps(func)
         def _inner():
@@ -75,6 +76,7 @@ def polling(
                 process_worker=process_worker,
                 aws_profile=aws_profile,
                 max_retry_count=max_retry_count,
+                decoder=decoder,
             )
             set_handler(func.__name__, p)
 
@@ -214,7 +216,7 @@ def _execute(
             }
         p.handler(
             p,
-            body,
+            p.decorator(body) if p.decorator is not None else body,
             message_attribute,
             attribute.get("MessageGroupId", None),
             attribute.get("MessageDeduplicationId", None),
