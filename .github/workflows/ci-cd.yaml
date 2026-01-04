@@ -18,11 +18,11 @@ jobs:
         uses: styfle/cancel-workflow-action@0.11.0
         with:
           access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: startsWith(github.event.ref, 'refs/heads/main')
         with:
           fetch-depth: 0
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: startsWith(github.event.ref, 'refs/tags') || github.event_name == 'release'
       - name: Set up Python
         uses: actions/setup-python@v4
