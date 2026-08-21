@@ -19,7 +19,7 @@ RUN apt-get update \
     && tar xzvf docker-${DOCKER_CLIENT_VERSION}.tgz \
     && chmod +x docker/*
 
-FROM --platform=$BUILDPLATFORM python:3.10.8-slim-bullseye
+FROM --platform=$BUILDPLATFORM python:3.13.6-slim-bullseye
 
 ENV DEBIAN_FRONTEND=noninteractive \
     GROUPNAME=user \
